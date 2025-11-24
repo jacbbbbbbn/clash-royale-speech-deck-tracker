@@ -8,6 +8,7 @@ class DeckTracker {
         this.cardAlias = {}; // 别名映射
         this.slots = []; // 槽位元素数组
         this.textLog = []; // 文本记录数组
+        this.permissionGranted = localStorage.getItem('micPermissionGranted') === 'true'; // 新增：持久化权限标志位
         this.loadConfig();
         this.loadDeck();
         this.initUI();
@@ -63,23 +64,30 @@ class DeckTracker {
         this.updateDisplay();
     }
 
-    // 启动实时语音识别（持续监听，权限预检查）
+    // 启动实时语音识别（持续监听，权限单次预检查）
     startListening() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             alert('浏览器不支持Web Speech API。请使用Google Chrome。');
             return;
         }
 
-        // 权限预检查
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(() => {
-                console.log('麦克风权限已授予，继续启动识别。');
-                this.initRecognition();
-            })
-            .catch((err) => {
-                console.error('麦克风权限被拒绝：', err);
-                alert('请在浏览器设置中允许麦克风访问，然后重试。');
-            });
+        // 新增逻辑：仅首次检查权限，后续直接启动
+        if (!this.permissionGranted) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(() => {
+                    console.log('麦克风权限已授予，继续启动识别。');
+                    localStorage.setItem('micPermissionGranted', 'true'); // 持久化标志位
+                    this.permissionGranted = true;
+                    this.initRecognition();
+                })
+                .catch((err) => {
+                    console.error('麦克风权限被拒绝：', err);
+                    alert('请在浏览器设置中允许麦克风访问，然后重试。');
+                });
+        } else {
+            console.log('权限已授予，直接启动识别。');
+            this.initRecognition();
+        }
     }
 
     // 初始化识别（持续监听核心）
@@ -170,9 +178,9 @@ class DeckTracker {
         return intersection.size / Math.max(set1.size, set2.size, 1); // 避免除零
     }
 
-    // 立即记录至履带（新增：相邻重复检测）
+    // 立即记录至履带（相邻重复检测）
     recordCard(card) {
-        // 新增功能：检测相邻重复，若末尾相同则跳过添加
+        // 检测相邻重复，若末尾相同则跳过添加
         if (this.deck.length > 0 && this.deck[this.deck.length - 1] === card) {
             console.log(`相邻重复检测：${card} 已存在，跳过添加。`);
             return; // 不添加，履带循环不变
