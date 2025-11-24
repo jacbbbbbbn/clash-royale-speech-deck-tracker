@@ -6,19 +6,25 @@ class DeckTracker {
         this.recognition = null;
         this.isListening = false;
         this.cardAlias = {}; // 别名映射
+        this.slots = []; // 槽位元素数组
         this.loadConfig();
         this.loadDeck();
         this.initUI();
     }
 
     // 加载卡牌别名（从JSON，示例扩展）
-    loadConfig() {
-        // 模拟JSON加载；实际从card_alias.json fetch
-        this.cardAlias = {
-            "骑士": "骑士", "火球": "火球", "猪": "皇家巨人", "亡灵": "骷髅海",
-            "弓箭手": "弓箭手", "宝宝龙": "飞龙宝宝", "野猪": "野猪骑士", "气球": "气球兵"
-            // 扩展至72张：fetch('card_alias.json').then(r => r.json()).then(data => this.cardAlias = data);
-        };
+    async loadConfig() {
+        try {
+            const response = await fetch('card_alias.json');
+            this.cardAlias = await response.json();
+        } catch (e) {
+            console.error('加载卡牌库失败，使用默认');
+            // 回退示例数据
+            this.cardAlias = {
+                "骑士": "骑士", "火球": "火球", "猪": "皇家猪", "亡灵": "骷髅军团"
+                // 完整库从JSON加载
+            };
+        }
     }
 
     // 持久化：localStorage中断恢复
@@ -34,11 +40,21 @@ class DeckTracker {
         localStorage.setItem('deckState', JSON.stringify(this.deck));
     }
 
-    // 初始化UI
+    // 初始化UI（生成8个槽位）
     initUI() {
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const status = document.getElementById('status');
+        const deckSlots = document.getElementById('deckSlots');
+
+        // 动态生成8个槽位
+        for (let i = 0; i < this.maxSlots; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot empty';
+            slot.textContent = '空槽';
+            deckSlots.appendChild(slot);
+            this.slots.push(slot);
+        }
 
         startBtn.addEventListener('click', () => this.startListening());
         stopBtn.addEventListener('click', () => this.stopListening());
@@ -49,7 +65,7 @@ class DeckTracker {
     // 启动实时语音识别（连续模式，临时结果）
     startListening() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            alert('浏览器不支持Web Speech API。请使用Chrome。');
+            alert('浏览器不支持Web Speech API。请使用Google Chrome。');
             return;
         }
 
@@ -135,13 +151,21 @@ class DeckTracker {
         this.deck.push(card);
         this.saveDeck();
         this.updateDisplay();
-        console.log(`记录 → ${card} (置信度: ${this.similarity(card.toLowerCase(), card.toLowerCase())})`); // 调试
+        console.log(`记录 → ${card}`);
     }
 
-    // 更新显示
+    // 更新显示（填充8个槽位）
     updateDisplay() {
-        const display = document.getElementById('deckDisplay');
-        display.textContent = `当前履带：${this.deck.length ? this.deck.join(' → ') : '空'}`;
+        for (let i = 0; i < this.maxSlots; i++) {
+            const slot = this.slots[i];
+            if (i < this.deck.length) {
+                slot.textContent = this.deck[i];
+                slot.className = 'slot filled';
+            } else {
+                slot.textContent = '空槽';
+                slot.className = 'slot empty';
+            }
+        }
     }
 }
 
