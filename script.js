@@ -170,8 +170,14 @@ class DeckTracker {
         return intersection.size / Math.max(set1.size, set2.size, 1); // 避免除零
     }
 
-    // 立即记录至履带
+    // 立即记录至履带（新增：相邻重复检测）
     recordCard(card) {
+        // 新增功能：检测相邻重复，若末尾相同则跳过添加
+        if (this.deck.length > 0 && this.deck[this.deck.length - 1] === card) {
+            console.log(`相邻重复检测：${card} 已存在，跳过添加。`);
+            return; // 不添加，履带循环不变
+        }
+
         if (this.deck.length >= this.maxSlots) {
             this.deck.shift(); // 顶替最旧
         }
@@ -181,12 +187,12 @@ class DeckTracker {
         console.log(`立即记录 → ${card}`);
     }
 
-    // 更新显示（填充8个槽位）
+    // 更新显示（填充8个槽位，每槽显示对应名称）
     updateDisplay() {
         for (let i = 0; i < this.maxSlots; i++) {
             const slot = this.slots[i];
             if (i < this.deck.length) {
-                slot.textContent = this.deck[i];
+                slot.textContent = this.deck[i]; // 显示对应卡牌标准名称
                 slot.className = 'slot filled';
             } else {
                 slot.textContent = '空槽';
@@ -195,7 +201,7 @@ class DeckTracker {
         }
     }
 
-    // 新增：添加监听文本至下方记录区
+    // 添加监听文本至下方记录区
     addToTextLog(text) {
         this.textLog.push(`${new Date().toLocaleTimeString()}: ${text}`);
         const textLogEl = document.getElementById('textLog');
