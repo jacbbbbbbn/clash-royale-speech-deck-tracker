@@ -9,10 +9,17 @@
 <body>
     <div class="container">
         <h1>皇室战争语音记牌器</h1>
-        <button id="startBtn">启动监听</button>
-        <button id="stopBtn" disabled>停止监听</button>
-        <div id="deckDisplay" class="deck">当前履带（空）</div>
-        <p id="status">就绪。喊牌名开始记录。</p>
+        <div class="controls">
+            <button id="startBtn">启动监听</button>
+            <button id="stopBtn" disabled>停止监听</button>
+        </div>
+        <div id="status" class="status">就绪。喊牌名开始记录。</div>
+        <div class="deck-container">
+            <h2>8槽履带（从左至右：最早至最新）</h2>
+            <div id="deckSlots" class="deck-slots">
+                <!-- 动态生成8个槽位 -->
+            </div>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>
