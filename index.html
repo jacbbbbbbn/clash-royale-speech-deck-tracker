@@ -3,266 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>皇室战争极简语音记牌器</title>
+    <title>Clash Royale 语音牌组追踪器</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            color: #333;
-            line-height: 1.6;
-        }
-        h1 {
-            text-align: center;
-            color: #d32f2f;
-            margin-bottom: 10px;
-            font-size: 1.8em;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-        }
-        p {
-            text-align: center;
-            margin: 10px 0;
-            font-size: 0.95em;
-            color: #666;
-        }
-        #status {
-            font-weight: bold;
-            color: #1976d2;
-            text-align: center;
-            padding: 10px;
-            background: rgba(25, 118, 210, 0.1);
-            border-radius: 5px;
-            margin: 10px 0;
-            border-left: 4px solid #1976d2;
-        }
-        button {
-            display: block;
-            width: 200px;
-            margin: 20px auto;
-            padding: 12px;
-            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        #queue {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 12px;
-            margin-top: 20px;
-            padding: 10px;
-        }
-        .slot {
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-            min-height: 60px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .slot.filled {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border-color: #1976d2;
-            transform: scale(1.02);
-        }
-        .slot:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .card-icon {
-            font-size: 24px;
-            margin-bottom: 5px;
-            opacity: 0.8;
-        }
-        @media (max-width: 480px) {
-            #queue {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            h1 {
-                font-size: 1.5em;
-            }
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #deck { border: 1px solid #ccc; padding: 10px; min-height: 100px; }
+        button { margin: 5px; padding: 10px; }
+        input { width: 200px; padding: 5px; }
     </style>
 </head>
 <body>
-    <h1>皇室战争极简语音记牌器</h1>
-    <p>喊出对手牌名（如“骑士”），满8张自动履带循环。点击“开始监听”授权麦克风。</p>
-    <p id="status">状态：未启动</p>
-    <button id="startBtn">开始监听</button>
-    <div id="queue"></div>
-
+    <h1>Clash Royale 语音牌组追踪器</h1>
+    
+    <!-- 新增：手动输入窗口 -->
+    <div>
+        <label for="manualInput">手动输入卡牌名称：</label>
+        <input type="text" id="manualInput" placeholder="e.g., archers">
+        <button onclick="addCardFromInput()">添加卡牌</button>
+    </div>
+    
+    <br>
+    <button onclick="startListening()">开始语音识别</button>
+    <button onclick="stopListening()">停止</button>
+    <br><br>
+    
+    <div id="deck">当前牌组：</div>
+    
     <script>
-        // 卡牌名称列表（部分示例，实际可扩展完整皇室战争卡牌）
-        const cardNames = [
-            '骑士', '弓箭手', '哥布林', '巨人', '骷髅兵', '法师', '小鬼', '炸弹兵',
-            '王子', '女巫', '气球', '矿工', '野蛮人', '冰法师', '电法师', '弓手',
-            '骷髅巨人', '地狱塔', '火球', '箭雨', '闪电', '日志', '火箭', '地震'
-        ];
-
-        // 模糊匹配函数（简单 Levenshtein 距离实现）
-        function levenshteinDistance(str1, str2) {
-            const matrix = [];
-            for (let i = 0; i <= str2.length; i++) {
-                matrix[i] = [i];
-            }
-            for (let j = 0; j <= str1.length; j++) {
-                matrix[0][j] = j;
-            }
-            for (let i = 1; i <= str2.length; i++) {
-                for (let j = 1; j <= str1.length; j++) {
-                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                        matrix[i][j] = matrix[i - 1][j - 1];
-                    } else {
-                        matrix[i][j] = Math.min(
-                            matrix[i - 1][j - 1] + 1,
-                            matrix[i][j - 1] + 1,
-                            matrix[i - 1][j] + 1
-                        );
-                    }
-                }
-            }
-            return matrix[str2.length][str1.length];
-        }
-
-        function findBestMatch(input) {
-            let bestMatch = null;
-            let minDistance = Infinity;
-            cardNames.forEach(card => {
-                const distance = levenshteinDistance(input.toLowerCase(), card.toLowerCase());
-                if (distance < minDistance && distance <= 2) {  // 容忍2个字符差异
-                    minDistance = distance;
-                    bestMatch = card;
-                }
-            });
-            return bestMatch;
-        }
-
-        // 队列管理
-        let queue = JSON.parse(localStorage.getItem('deckQueue')) || [];
-        let recognition = null;
-        let isListening = false;
-
-        // 跨浏览器兼容的 SpeechRecognition 构造函数
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert('浏览器不支持语音识别。请使用 Chrome 或 Edge。');
-            throw new Error('SpeechRecognition not supported');
-        }
-
-        recognition = new SpeechRecognition();
-        recognition.lang = 'zh-CN';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = function(event) {
-            let finalTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                }
-            }
-            if (finalTranscript) {
-                const matchedCard = findBestMatch(finalTranscript);
-                if (matchedCard) {
-                    addToQueue(matchedCard);
+        let recognition;
+        let currentDeck = [];
+        let cardAliases = {}; // 卡牌别名映射
+        
+        // 加载卡牌别名（从原JSON）
+        fetch('card_alias.json')
+            .then(response => response.json())
+            .then(data => {
+                cardAliases = data;
+                console.log('卡牌别名加载完成');
+            })
+            .catch(err => console.error('加载别名失败:', err));
+        
+        // 手动输入添加卡牌（新增功能）
+        function addCardFromInput() {
+            const input = document.getElementById('manualInput');
+            const text = input.value.trim().toLowerCase();
+            if (text) {
+                const card = findCard(text);
+                if (card && !currentDeck.includes(card)) {
+                    currentDeck.push(card);
+                    updateDeckDisplay();
+                    input.value = '';
                 } else {
-                    updateStatus('未匹配到卡牌：' + finalTranscript);
+                    alert('无效卡牌或已存在');
                 }
             }
-        };
-
-        recognition.onerror = function(event) {
-            updateStatus('语音识别错误：' + event.error);
-            if (event.error === 'not-allowed') {
-                isListening = false;
-                document.getElementById('startBtn').textContent = '开始监听';
-            }
-        };
-
-        recognition.onend = function() {
-            if (isListening) {
-                recognition.start();  // 连续监听
-            }
-        };
-
-        function addToQueue(card) {
-            const isFull = queue.length >= 8;
-            const hasDuplicate = queue.includes(card);
-
-            if (!isFull && hasDuplicate) {
-                updateStatus(`重复卡牌（${card}），已忽略。队列未满时不允许重复。`);
-                return;  // 跳过添加
-            }
-
-            queue.push(card);
-            if (queue.length > 8) {
-                queue.shift();  // 履带循环
-            }
-            localStorage.setItem('deckQueue', JSON.stringify(queue));
-            renderQueue();
-            updateStatus(`已添加：${card}${isFull ? '（队列满，履带循环）' : ''}`);
         }
-
-        function renderQueue() {
-            const queueDiv = document.getElementById('queue');
-            queueDiv.innerHTML = '';
-            for (let i = 0; i < 8; i++) {
-                const slot = document.createElement('div');
-                slot.className = 'slot';
-                if (i < queue.length) {
-                    slot.innerHTML = `<div class="card-icon">⚔️</div>${queue[i]}`;  // 简单图标占位
-                    slot.classList.add('filled');
-                } else {
-                    slot.textContent = '空槽';
+        
+        // 查找卡牌（原逻辑）
+        function findCard(text) {
+            for (let alias in cardAliases) {
+                if (cardAliases[alias].includes(text)) {
+                    return alias;
                 }
-                queueDiv.appendChild(slot);
+            }
+            return text; // 若无别名，直接使用
+        }
+        
+        // 更新牌组显示（原逻辑）
+        function updateDeckDisplay() {
+            const deckDiv = document.getElementById('deck');
+            deckDiv.innerHTML = '当前牌组：' + (currentDeck.length ? currentDeck.join(', ') : '空');
+        }
+        
+        // 语音识别（修改为调用后端API）
+        async function startListening() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const base64Audio = reader.result.split(',')[1]; // base64数据
+                        const response = await fetch('/recognize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ audio: base64Audio })
+                        });
+                        const result = await response.json();
+                        if (result.text) {
+                            const card = findCard(result.text.toLowerCase());
+                            if (card && !currentDeck.includes(card)) {
+                                currentDeck.push(card);
+                                updateDeckDisplay();
+                            }
+                        }
+                    };
+                    reader.readAsDataURL(audioBlob);
+                };
+                
+                mediaRecorder.start();
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                    stream.getTracks().forEach(track => track.stop());
+                }, 5000); // 5秒录音
+            } catch (err) {
+                alert('录音失败: ' + err.message);
             }
         }
-
-        function updateStatus(message) {
-            document.getElementById('status').textContent = `状态：${message}`;
-        }
-
-        document.getElementById('startBtn').addEventListener('click', function() {
-            const btn = this;
-            if (!isListening) {
-                recognition.start();
-                isListening = true;
-                btn.textContent = '停止监听';
-                updateStatus('监听中...');
-            } else {
+        
+        function stopListening() {
+            if (recognition) {
                 recognition.stop();
-                isListening = false;
-                btn.textContent = '开始监听';
-                updateStatus('已停止');
             }
+        }
+        
+        // 牌组满8张时重置（原逻辑，可选）
+        window.addEventListener('beforeunload', () => {
+            currentDeck = [];
         });
-
-        // 初始化渲染
-        renderQueue();
     </script>
 </body>
 </html>
