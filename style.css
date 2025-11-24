@@ -171,3 +171,31 @@ class DeckTracker {
 
 // 初始化
 new DeckTracker();
+        .log-section {
+    margin-top: 30px;
+}
+
+.log-section h2 {
+    color: #4a5568;
+    font-size: 1.2em;
+    margin-bottom: 15px;
+}
+
+.text-log {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    text-align: left;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.text-log p {
+    margin: 5px 0;
+    padding: 2px;
+    border-left: 3px solid #4CAF50;
+    background: white;
+}
