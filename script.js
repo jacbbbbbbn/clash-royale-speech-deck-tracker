@@ -8,7 +8,7 @@ class DeckTracker {
         this.cardAlias = {}; // 别名映射
         this.slots = []; // 槽位元素数组
         this.textLog = []; // 文本记录数组
-        this.permissionGranted = localStorage.getItem('micPermissionGranted') === 'true'; // 新增：持久化权限标志位
+        this.permissionGranted = false; // 新增：识别启动事件标志
         this.loadConfig();
         this.loadDeck();
         this.initUI();
@@ -64,30 +64,15 @@ class DeckTracker {
         this.updateDisplay();
     }
 
-    // 启动实时语音识别（持续监听，权限单次预检查）
+    // 启动实时语音识别（持续监听，单次权限触发）
     startListening() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             alert('浏览器不支持Web Speech API。请使用Google Chrome。');
             return;
         }
 
-        // 新增逻辑：仅首次检查权限，后续直接启动
-        if (!this.permissionGranted) {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(() => {
-                    console.log('麦克风权限已授予，继续启动识别。');
-                    localStorage.setItem('micPermissionGranted', 'true'); // 持久化标志位
-                    this.permissionGranted = true;
-                    this.initRecognition();
-                })
-                .catch((err) => {
-                    console.error('麦克风权限被拒绝：', err);
-                    alert('请在浏览器设置中允许麦克风访问，然后重试。');
-                });
-        } else {
-            console.log('权限已授予，直接启动识别。');
-            this.initRecognition();
-        }
+        // 修改逻辑：直接初始化识别，浏览器通过start()单次提示权限
+        this.initRecognition();
     }
 
     // 初始化识别（持续监听核心）
@@ -97,6 +82,13 @@ class DeckTracker {
         this.recognition.continuous = true; // 持续监听
         this.recognition.interimResults = true; // 启用临时结果，处理短句拆分
         this.recognition.lang = 'zh-CN';
+
+        // 新增：onstart事件确认权限授权后设置标志
+        this.recognition.onstart = () => {
+            this.permissionGranted = true;
+            console.log('识别已启动，权限授权成功。');
+            document.getElementById('status').textContent = '持续监听中... 喊牌名立即记录。';
+        };
 
         this.recognition.onresult = (event) => {
             let interimText = ''; // 临时文本（未确认）
@@ -119,7 +111,11 @@ class DeckTracker {
 
         this.recognition.onerror = (event) => {
             console.error('识别错误：', event.error);
-            document.getElementById('status').textContent = '识别中断，重试中...';
+            if (event.error === 'not-allowed') {
+                document.getElementById('status').textContent = '权限被拒绝，请在浏览器设置中允许麦克风访问。';
+            } else {
+                document.getElementById('status').textContent = '识别中断，重试中...';
+            }
         };
 
         this.recognition.onend = () => {
@@ -132,7 +128,6 @@ class DeckTracker {
         this.isListening = true;
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
-        document.getElementById('status').textContent = '持续监听中... 喊牌名立即记录。';
     }
 
     stopListening() {
