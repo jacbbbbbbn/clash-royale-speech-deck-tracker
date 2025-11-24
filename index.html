@@ -5,199 +5,218 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>皇室战争极简语音记牌器</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; color: #fff; margin: 0; padding: 20px; text-align: center; }
-        h1 { color: #ff6b35; margin-bottom: 20px; }
-        #status { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
-        #deck { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
-        .card-slot { background: #444; padding: 10px; border-radius: 5px; min-width: 80px; }
-        button { background: #ff6b35; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
-        button:hover { background: #e55a2b; }
-        button:disabled { background: #666; cursor: not-allowed; }
-        #log { background: #222; padding: 10px; border-radius: 5px; margin: 10px 0; max-height: 200px; overflow-y: auto; text-align: left; font-size: 12px; }
-        @media (max-width: 600px) { #deck { flex-direction: column; } }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #d32f2f;
+        }
+        p {
+            text-align: center;
+            margin: 10px 0;
+        }
+        #status {
+            font-weight: bold;
+            color: #1976d2;
+        }
+        button {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 10px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #queue {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .slot {
+            background-color: white;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .slot.filled {
+            background-color: #e3f2fd;
+            border-color: #1976d2;
+        }
     </style>
 </head>
 <body>
     <h1>皇室战争极简语音记牌器</h1>
     <p>喊出对手牌名（如“骑士”），满8张自动履带循环。点击“开始监听”授权麦克风。</p>
-    
-    <div id="status">状态：未启动</div>
+    <p id="status">状态：未启动</p>
     <button id="startBtn">开始监听</button>
-    <button id="stopBtn" disabled>停止监听</button>
-    <button id="resetBtn">重置履带</button>
-    
-    <h3>当前8槽履带：</h3>
-    <div id="deck"></div>
-    
-    <h3>未记录日志（调试用）：</h3>
-    <div id="log"></div>
+    <div id="queue"></div>
 
     <script>
-        // 1. 卡牌别名映射（内嵌JSON，支持72张牌扩展）
-        const cardAlias = {
-            "骑士": "骑士", "弓箭手": "弓箭手", "宝宝龙": "飞龙宝宝", "亡灵": "骷髅海",
-            "猪": "皇家巨人", "野猪": "野猪骑士", "气球": "气球兵", "哥布林": "哥布林",
-            "火枪": "火枪手", "公主": "公主", "冰精": "冰精灵", "矿工": "矿工",
-            "电磁炮": "电磁炮", "飞桶": "哥布林飞桶", "镜像": "镜像", "冻结": "冰冻",
-            "火球": "火球", "箭雨": "箭雨", "电击": "电击", "骷髅军": "骷髅军团",
-            // ... 扩展至72张，例如："期士": "骑士" 以支持模糊
-        };
+        // 卡牌名称列表（部分示例，实际可扩展完整皇室战争卡牌）
+        const cardNames = [
+            '骑士', '弓箭手', '哥布林', '巨人', '骷髅兵', '法师', '小鬼', '炸弹兵',
+            '王子', '女巫', '气球', '矿工', '野蛮人', '冰法师', '电法师', '弓手',
+            '骷髅巨人', '地狱塔', '火球', '箭雨', '闪电', '日志', '火箭', '地震'
+        ];
 
-        // 2. 初始化8槽履带（模拟deque，使用数组+shift控制大小）
-        let deck = [];
-        let recognition = null;
-        const maxSlots = 8;
-        const statusEl = document.getElementById('status');
-        const deckEl = document.getElementById('deck');
-        const logEl = document.getElementById('log');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const resetBtn = document.getElementById('resetBtn');
-
-        // 恢复状态（localStorage中断恢复）
-        function loadDeck() {
-            const saved = localStorage.getItem('deck_state');
-            if (saved) {
-                deck = JSON.parse(saved).slice(-maxSlots); // 取最后8张
-                updateDisplay();
-                statusEl.textContent = `状态：已恢复履带（${deck.length}/8）`;
-            } else {
-                statusEl.textContent = '状态：新对局（0/8）';
+        // 模糊匹配函数（简单 Levenshtein 距离实现）
+        function levenshteinDistance(str1, str2) {
+            const matrix = [];
+            for (let i = 0; i <= str2.length; i++) {
+                matrix[i] = [i];
             }
-        }
-
-        // 保存状态
-        function saveDeck() {
-            localStorage.setItem('deck_state', JSON.stringify(deck));
-        }
-
-        // 更新显示
-        function updateDisplay() {
-            deckEl.innerHTML = '';
-            for (let i = 0; i < maxSlots; i++) {
-                const slot = document.createElement('div');
-                slot.className = 'card-slot';
-                slot.textContent = deck[i] || '空槽';
-                deckEl.appendChild(slot);
+            for (let j = 0; j <= str1.length; j++) {
+                matrix[0][j] = j;
             }
-            statusEl.textContent = `状态：履带更新（${deck.length}/8）`;
-        }
-
-        // 相似度匹配（Levenshtein阈值0.6）
-        function findBestMatch(text) {
-            let bestMatch = null;
-            let bestRatio = 0;
-            for (const [alias, realName] of Object.entries(cardAlias)) {
-                const ratio = similarity(text.toLowerCase(), alias.toLowerCase());
-                if (ratio > bestRatio && ratio > 0.6) {
-                    bestRatio = ratio;
-                    bestMatch = { name: realName, ratio };
+            for (let i = 1; i <= str2.length; i++) {
+                for (let j = 1; j <= str1.length; j++) {
+                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
                 }
             }
+            return matrix[str2.length][str1.length];
+        }
+
+        function findBestMatch(input) {
+            let bestMatch = null;
+            let minDistance = Infinity;
+            cardNames.forEach(card => {
+                const distance = levenshteinDistance(input.toLowerCase(), card.toLowerCase());
+                if (distance < minDistance && distance <= 2) {  // 容忍2个字符差异
+                    minDistance = distance;
+                    bestMatch = card;
+                }
+            });
             return bestMatch;
         }
 
-        // 简单相似度函数（difflib模拟）
-        function similarity(s1, s2) {
-            const longer = s1.length > s2.length ? s1 : s2;
-            const shorter = s1.length > s2.length ? s2 : s1;
-            const len = longer.length;
-            if (len === 0) return 1.0;
-            let dist = 0;
-            for (let i = 0; i < shorter.length; i++) {
-                if (longer[i] !== shorter[i]) dist++;
-            }
-            return 1 - (dist / len);
+        // 队列管理
+        let queue = JSON.parse(localStorage.getItem('deckQueue')) || [];
+        let recognition = null;
+        let isListening = false;
+
+        // 跨浏览器兼容的 SpeechRecognition 构造函数
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('浏览器不支持语音识别。请使用 Chrome 或 Edge。');
+            throw new Error('SpeechRecognition not supported');
         }
 
-        // 日志追加
-        function addLog(text) {
-            const entry = document.createElement('div');
-            entry.textContent = `${new Date().toLocaleTimeString()}: ${text}`;
-            logEl.appendChild(entry);
-            logEl.scrollTop = logEl.scrollHeight;
-        }
+        recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
-        // 记录牌
-        function recordCard(realName, ratio) {
-            if (deck.length >= maxSlots) {
-                deck.shift(); // 顶替最旧（履带循环）
-            }
-            deck.push(realName);
-            saveDeck(); // 保存恢复
-            updateDisplay();
-            addLog(`记录成功：${realName} (置信度: ${ratio.toFixed(2)})`);
-        }
-
-        // Web Speech API初始化
-        function initRecognition() {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                statusEl.textContent = '状态：浏览器不支持语音识别';
-                return;
-            }
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.continuous = true; // 连续监听
-            recognition.interimResults = false; // 只取最终结果
-            recognition.lang = 'zh-CN'; // 中文识别
-
-            recognition.onresult = (event) => {
-                let text = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
-                // 模拟VAD拆分：按常见分隔符分割连续文本
-                const segments = text.split(/[,，.。;；\s]{1,2}/).filter(s => s.length > 1);
-                segments.forEach(seg => {
-                    const match = findBestMatch(seg);
-                    if (match) {
-                        recordCard(match.name, match.ratio);
-                    } else {
-                        addLog(`未记录：'${seg}' (可能识别错误)`);
-                        // 模拟missed_inputs.log
-                        localStorage.setItem('missed_log', (localStorage.getItem('missed_log') || '') + `${seg}\n`);
-                    }
-                });
-            };
-
-            recognition.onerror = (event) => {
-                addLog(`识别错误：${event.error}`);
-                statusEl.textContent = '状态：识别中断，重试中...';
-            };
-
-            recognition.onend = () => {
-                if (document.getElementById('startBtn').disabled) {
-                    recognition.start(); // 自动重启连续监听
+        recognition.onresult = function(event) {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
                 }
-            };
+            }
+            if (finalTranscript) {
+                const matchedCard = findBestMatch(finalTranscript);
+                if (matchedCard) {
+                    addToQueue(matchedCard);
+                    updateStatus(`识别到：${matchedCard}`);
+                } else {
+                    updateStatus('未匹配到卡牌：' + finalTranscript);
+                }
+            }
+        };
+
+        recognition.onerror = function(event) {
+            updateStatus('语音识别错误：' + event.error);
+            if (event.error === 'not-allowed') {
+                isListening = false;
+                document.getElementById('startBtn').textContent = '开始监听';
+            }
+        };
+
+        recognition.onend = function() {
+            if (isListening) {
+                recognition.start();  // 连续监听
+            }
+        };
+
+        function addToQueue(card) {
+            queue.push(card);
+            if (queue.length > 8) {
+                queue.shift();  // 履带循环
+            }
+            localStorage.setItem('deckQueue', JSON.stringify(queue));
+            renderQueue();
         }
 
-        // 事件绑定
-        startBtn.onclick = () => {
-            initRecognition();
-            recognition.start();
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            statusEl.textContent = '状态：监听中...';
-        };
+        function renderQueue() {
+            const queueDiv = document.getElementById('queue');
+            queueDiv.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'slot';
+                if (i < queue.length) {
+                    slot.textContent = queue[i];
+                    slot.classList.add('filled');
+                } else {
+                    slot.textContent = '空槽';
+                }
+                queueDiv.appendChild(slot);
+            }
+        }
 
-        stopBtn.onclick = () => {
-            recognition.stop();
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            statusEl.textContent = '状态：已停止';
-        };
+        function updateStatus(message) {
+            document.getElementById('status').textContent = `状态：${message}`;
+        }
 
-        resetBtn.onclick = () => {
-            deck = [];
-            localStorage.removeItem('deck_state');
-            localStorage.removeItem('missed_log');
-            logEl.innerHTML = '';
-            updateDisplay();
-            statusEl.textContent = '状态：已重置';
-            addLog('履带重置');
-        };
+        document.getElementById('startBtn').addEventListener('click', function() {
+            const btn = this;
+            if (!isListening) {
+                recognition.start();
+                isListening = true;
+                btn.textContent = '停止监听';
+                btn.disabled = false;
+                updateStatus('监听中...');
+            } else {
+                recognition.stop();
+                isListening = false;
+                btn.textContent = '开始监听';
+                updateStatus('已停止');
+            }
+        });
 
-        // 页面加载时恢复
-        loadDeck();
-        updateDisplay();
+        // 初始化渲染
+        renderQueue();
     </script>
 </body>
 </html>
