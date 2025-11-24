@@ -1,107 +1,173 @@
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    min-height: 100vh;
-    color: #333;
+// 核心逻辑：整合历史需求
+class DeckTracker {
+    constructor() {
+        this.deck = []; // 8槽履带数组
+        this.maxSlots = 8;
+        this.recognition = null;
+        this.isListening = false;
+        this.cardAlias = {}; // 别名映射
+        this.slots = []; // 槽位元素数组
+        this.loadConfig();
+        this.loadDeck();
+        this.initUI();
+    }
+
+    // 加载卡牌别名（从JSON，示例扩展）
+    async loadConfig() {
+        try {
+            const response = await fetch('card_alias.json');
+            this.cardAlias = await response.json();
+        } catch (e) {
+            console.error('加载卡牌库失败，使用默认');
+            // 回退示例数据
+            this.cardAlias = {
+                "骑士": "骑士", "火球": "火球", "猪": "皇家猪", "亡灵": "骷髅军团"
+                // 完整库从JSON加载
+            };
+        }
+    }
+
+    // 持久化：localStorage中断恢复
+    loadDeck() {
+        const saved = localStorage.getItem('deckState');
+        if (saved) {
+            this.deck = JSON.parse(saved).slice(-this.maxSlots); // 恢复最后8张
+            this.updateDisplay();
+        }
+    }
+
+    saveDeck() {
+        localStorage.setItem('deckState', JSON.stringify(this.deck));
+    }
+
+    // 初始化UI（生成8个槽位）
+    initUI() {
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
+        const deckSlots = document.getElementById('deckSlots');
+
+        // 动态生成8个槽位
+        for (let i = 0; i < this.maxSlots; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot empty';
+            slot.textContent = '空槽';
+            deckSlots.appendChild(slot);
+            this.slots.push(slot);
+        }
+
+        startBtn.addEventListener('click', () => this.startListening());
+        stopBtn.addEventListener('click', () => this.stopListening());
+
+        this.updateDisplay();
+    }
+
+    // 启动实时语音识别（连续模式，临时结果）
+    startListening() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert('浏览器不支持Web Speech API。请使用Google Chrome。');
+            return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true; // 连续监听
+        this.recognition.interimResults = true; // 临时结果处理连续语音
+        this.recognition.lang = 'zh-CN'; // 中文识别
+
+        this.recognition.onresult = (event) => {
+            let fullText = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                fullText += event.results[i][0].transcript; // 合并结果
+            }
+            this.processText(fullText); // 处理拆分与匹配
+        };
+
+        this.recognition.onerror = (event) => {
+            console.error('识别错误：', event.error);
+            document.getElementById('status').textContent = '识别中断，重试中...';
+        };
+
+        this.recognition.onend = () => {
+            if (this.isListening) this.recognition.start(); // 自动重启
+        };
+
+        this.recognition.start();
+        this.isListening = true;
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('status').textContent = '监听中... 喊牌名记录。';
+    }
+
+    stopListening() {
+        if (this.recognition) this.recognition.stop();
+        this.isListening = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('status').textContent = '已停止。';
+    }
+
+    // 处理文本：简单拆分连续语音（空格/常见组合），模糊匹配
+    processText(text) {
+        const words = text.toLowerCase().trim().split(/\s+|(?=骑士|火球|猪|亡灵)/); // 正则拆分关键词边界
+        words.forEach(word => {
+            if (!word) return;
+            const matchedCard = this.fuzzyMatch(word);
+            if (matchedCard) {
+                this.recordCard(matchedCard);
+            } else {
+                console.log(`未记录（识别：'${word}'）。请重试。`); // 日志
+            }
+        });
+    }
+
+    // 模糊匹配（简单Levenshtein-like相似度阈值0.6）
+    fuzzyMatch(text) {
+        let bestMatch = null;
+        let bestScore = 0;
+        for (const [alias, realName] of Object.entries(this.cardAlias)) {
+            const score = this.similarity(text, alias.toLowerCase());
+            if (score > bestScore && score > 0.6) {
+                bestScore = score;
+                bestMatch = realName;
+            }
+        }
+        return bestMatch;
+    }
+
+    // 简单相似度计算（Jaccard-like，易实现）
+    similarity(s1, s2) {
+        const set1 = new Set(s1.split(''));
+        const set2 = new Set(s2.split(''));
+        const intersection = new Set([...set1].filter(x => set2.has(x)));
+        return intersection.size / Math.max(set1.size, set2.size);
+    }
+
+    // 记录至履带
+    recordCard(card) {
+        if (this.deck.length >= this.maxSlots) {
+            this.deck.shift(); // 顶替最旧
+        }
+        this.deck.push(card);
+        this.saveDeck();
+        this.updateDisplay();
+        console.log(`记录 → ${card}`);
+    }
+
+    // 更新显示（填充8个槽位）
+    updateDisplay() {
+        for (let i = 0; i < this.maxSlots; i++) {
+            const slot = this.slots[i];
+            if (i < this.deck.length) {
+                slot.textContent = this.deck[i];
+                slot.className = 'slot filled';
+            } else {
+                slot.textContent = '空槽';
+                slot.className = 'slot empty';
+            }
+        }
+    }
 }
 
-.container {
-    text-align: center;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
-    width: 100%;
-}
-
-h1 {
-    color: #4a5568;
-    margin-bottom: 20px;
-    font-size: 1.8em;
-}
-
-.controls {
-    margin: 20px 0;
-}
-
-button {
-    background: linear-gradient(45deg, #4CAF50, #45a049);
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    margin: 5px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: transform 0.2s;
-}
-
-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-}
-
-button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.status {
-    color: #718096;
-    font-style: italic;
-    margin: 15px 0;
-    padding: 10px;
-    background: #f7fafc;
-    border-radius: 4px;
-}
-
-.deck-container {
-    margin-top: 30px;
-}
-
-.deck-container h2 {
-    color: #4a5568;
-    font-size: 1.2em;
-    margin-bottom: 15px;
-}
-
-.deck-slots {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 10px;
-    padding: 15px;
-    background: #e8f5e8;
-    border: 2px solid #4CAF50;
-    border-radius: 8px;
-}
-
-.slot {
-    min-height: 60px;
-    padding: 10px;
-    background: white;
-    border: 1px solid #d4edda;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.9em;
-    color: #155724;
-    transition: background 0.3s;
-}
-
-.slot.empty {
-    background: #f8f9fa;
-    color: #6c757d;
-    font-style: italic;
-}
-
-.slot.filled {
-    background: #d4edda;
-    border-color: #28a745;
-}
+// 初始化
+new DeckTracker();
