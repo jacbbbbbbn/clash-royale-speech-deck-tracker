@@ -1,47 +1,46 @@
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  padding: 20px;
-  background: #f0f0f0;
-}
-.container {
-  max-width: 600px;
-  margin: 0 auto;
-}
-#status {
-  margin: 20px 0;
-  padding: 10px;
-  background: #e7f3ff;
-  border: 1px solid #b3d9ff;
-  border-radius: 5px;
-  color: #0066cc;
-}
-#deck-queue {
-  margin: 20px 0;
-  padding: 10px;
-  background: #fff;
-  border: 1px solid #ccc;
-  min-height: 50px;
-  border-radius: 5px;
-  font-size: 18px;
-}
-button {
-  margin: 5px;
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-#start-btn {
-  background: #4CAF50;
-  color: white;
-}
-#stop-btn {
-  background: #f44336;
-  color: white;
-}
-button:disabled {
-  background: #cccccc;
-  cursor: not-allowed;
-}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>皇室战争语音记牌器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>皇室战争语音记牌器</h1>
+            <p class="subtitle">通过语音记录对手卡组，实现8槽履带循环追踪</p>
+        </header>
+        
+        <div class="controls">
+            <button id="startBtn" aria-label="启动实时语音监听">启动监听</button>
+            <button id="stopBtn" disabled aria-label="停止实时语音监听">停止监听</button>
+        </div>
+        
+        <div id="status" class="status" role="status">
+            就绪状态。请确保Chrome浏览器已允许麦克风访问（地址栏锁图标 > 网站设置 > 麦克风 > 允许）。喊出牌名开始记录。
+        </div>
+        
+        <section class="deck-section" aria-labelledby="deck-title">
+            <h2 id="deck-title">8槽履带（从左至右：最早至最新）</h2>
+            <div id="deckSlots" class="deck-slots">
+                <!-- 动态生成8个槽位 -->
+            </div>
+        </section>
+        
+        <section class="log-section" aria-labelledby="log-title">
+            <h2 id="log-title">监听文本记录</h2>
+            <div id="textLog" class="text-log">
+                <!-- 实时追加识别文本 -->
+            </div>
+        </section>
+        
+        <footer class="help">
+            <p>调试提示：按 F12 打开控制台查看识别日志。若权限问题持续，请使用本地服务器（python -m http.server 8000）访问 http://localhost:8000。</p>
+        </footer>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
