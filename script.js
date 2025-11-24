@@ -107,14 +107,14 @@ class DeckTracker {
         };
 
         this.recognition.onerror = (event) => {
-    console.error('识别错误：', event.error);
-    if (event.error === 'not-allowed') {
-        document.getElementById('status').textContent = '权限被拒绝，请在浏览器设置中允许麦克风访问。';
-        this.stopListening();  // 新增：停止监听，防止循环请求
-    } else {
-        document.getElementById('status').textContent = '识别中断，重试中...';
-    }
-};
+            console.error('识别错误：', event.error);
+            if (event.error === 'not-allowed') {
+                document.getElementById('status').textContent = '权限被拒绝，请在浏览器设置中允许麦克风访问。';
+                this.stopListening();  // 新增：停止监听，防止循环请求
+            } else {
+                document.getElementById('status').textContent = '识别中断，重试中...';
+            }
+        };
 
         this.recognition.onend = () => {
             if (this.isListening) {
